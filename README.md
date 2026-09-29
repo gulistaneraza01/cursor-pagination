@@ -1,159 +1,86 @@
-# Turborepo starter
+# Cursor Pagination
 
-This Turborepo starter is maintained by the Turborepo core team.
+A cursor-based pagination demo: an Express + Prisma API paginating a Postgres `User` table, and a Next.js UI that infinite-scrolls through it.
 
-## Using this example
+![Demo](./media/demo.gif)
 
-Run the following command:
+## Architecture
 
-```sh
-npx create-turbo@latest
+Turborepo monorepo with two apps that talk to each other over HTTP:
+
+```
+apps/
+  server/   Express API (Bun runtime, Prisma + Postgres)
+  web/      Next.js UI (Tailwind, shadcn/ui, axios)
 ```
 
-## What's inside?
-
-This Turborepo includes the following packages/apps:
-
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```
+Browser
+  │  scroll
+  ▼
+apps/web (Next.js, :3000)
+  │  GET /v1/users?cursor=&limit=&sortBy=&order=
+  │  (proxied by a next.config.js rewrite)
+  ▼
+apps/server (Express, :8000)
+  routes/user.routes.ts
+    │  paginationMiddleware  → parses & validates cursor, limit, sortBy, order
+    ▼
+  controller/user.controller.ts   → request/response shape
+    ▼
+  services/user.service.ts        → Prisma query, builds { data, nextCursor }
+    ▼
+  Postgres (Neon), via Prisma
 ```
 
-Without global `turbo`, use your package manager:
+- **Pagination middleware** (`apps/server/src/middleware/pagination.middleware.ts`) is reusable across any list route: it validates `sortBy` against a per-route whitelist and defaults to `create_at desc` when not provided.
+- **Cursor stability**: results are ordered by `[{ create_at: order }, { id: order }]` so pagination stays stable even when many rows share the same timestamp (e.g. after a bulk seed).
+- **UI infinite scroll** (`apps/web/components/users/UserList.tsx`) uses an `IntersectionObserver` scoped to the scrollable list container (not the page), recreated on every page load so it keeps firing as content grows, with enough `rootMargin` lead time to prefetch before you hit the bottom.
+
+## Getting started
 
 ```sh
-cd my-turborepo
-npx turbo build
-bun exec turbo build
-bun exec turbo build
+bun install
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Server needs a Postgres connection string in `apps/server/.env`:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+```
+DATABASE_URL="postgresql://..."
+PORT=8000
+```
+
+Run both apps:
 
 ```sh
-turbo build --filter=docs
+cd apps/server && bun run dev   # http://localhost:8000
+cd apps/web    && bun run dev   # http://localhost:3000
 ```
 
-Without global `turbo`:
+Seed 1,000 demo users:
 
 ```sh
-npx turbo build --filter=docs
-bun exec turbo build --filter=docs
-bun exec turbo build --filter=docs
+cd apps/server
+bun run prisma/seed-users-csv.ts   # generates prisma/users.csv
+curl -X POST http://localhost:8000/v1/seed/seed-users
 ```
 
-### Develop
+## API
 
-To develop all apps and packages, run the following command:
+`GET /v1/users`
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+| Query param | Default      | Notes                                              |
+|-------------|--------------|-----------------------------------------------------|
+| `cursor`    | —            | Last row's `id` from the previous page              |
+| `limit`     | `20`         | Capped at `100`                                     |
+| `sortBy`    | `create_at`  | Whitelisted per route (`id`, `name`, `email`, `create_at`, `modified_at`) |
+| `order`     | `desc`       | `asc` or `desc`                                     |
 
-```sh
-cd my-turborepo
-turbo dev
+```json
+{
+  "data": [{ "id": "...", "name": "...", "email": "...", "create_at": "..." }],
+  "nextCursor": "01535982-4002-4671-8dfd-f46e4515f9cf"
+}
 ```
 
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+`nextCursor: null` means you've reached the end.
