@@ -7,8 +7,8 @@ export async function seedUsers(_req: Request, res: Response) {
 }
 
 export async function getUsers(req: Request, res: Response) {
-  const { cursor, limit } = req.pagination;
+  const { cursor, limit, sortBy, order } = req.pagination;
 
-  const { data, nextCursor } = await getUsersPaginated(cursor, limit);
+  const { data, nextCursor } = await getUsersPaginated(cursor, limit, sortBy, order);
   res.json({ data, nextCursor });
 }

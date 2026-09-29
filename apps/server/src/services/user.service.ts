@@ -17,11 +17,16 @@ export async function seedUsersFromCsv() {
   return result.count;
 }
 
-export async function getUsersPaginated(cursor?: string, limit = 20) {
+export async function getUsersPaginated(
+  cursor?: string,
+  limit = 20,
+  sortBy = 'create_at',
+  order: 'asc' | 'desc' = 'desc',
+) {
   const users = await prisma.user.findMany({
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    orderBy: [{ create_at: 'desc' }, { id: 'desc' }],
+    orderBy: [{ [sortBy]: order }, { id: order }],
   });
 
   const hasMore = users.length > limit;

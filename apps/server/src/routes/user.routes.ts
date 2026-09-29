@@ -4,5 +4,5 @@ import { paginationMiddleware } from '../middleware/pagination.middleware';
 
 export const userRoutes = Router();
 
-userRoutes.get('/', paginationMiddleware, getUsers);
+userRoutes.get('/', paginationMiddleware(['id', 'name', 'email', 'create_at', 'modified_at']), getUsers);
 userRoutes.post('/seed-users', seedUsers);
