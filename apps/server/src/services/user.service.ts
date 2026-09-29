@@ -16,3 +16,17 @@ export async function seedUsersFromCsv() {
   const result = await prisma.user.createMany({ data, skipDuplicates: true });
   return result.count;
 }
+
+export async function getUsersPaginated(cursor?: string, limit = 20) {
+  const users = await prisma.user.findMany({
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    orderBy: [{ create_at: 'desc' }, { id: 'desc' }],
+  });
+
+  const hasMore = users.length > limit;
+  const data = hasMore ? users.slice(0, limit) : users;
+  const nextCursor = hasMore ? data[data.length - 1]!.id : null;
+
+  return { data, nextCursor };
+}
