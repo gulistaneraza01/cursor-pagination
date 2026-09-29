@@ -6,13 +6,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function UserList() {
   const { users, isLoading, hasMore, error, fetchNextPage } = useInfiniteUsers();
+  const containerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const fetchNextPageRef = useRef(fetchNextPage);
   fetchNextPageRef.current = fetchNextPage;
 
   useEffect(() => {
+    const root = containerRef.current;
     const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!root || !sentinel) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -20,7 +22,7 @@ export function UserList() {
           fetchNextPageRef.current();
         }
       },
-      { rootMargin: "200px" },
+      { root, rootMargin: "300px" },
     );
 
     observer.observe(sentinel);
@@ -35,7 +37,10 @@ export function UserList() {
           <p className="mt-1 text-sm text-muted-foreground">{users.length} users loaded</p>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-border">
+        <div
+          ref={containerRef}
+          className="h-[70vh] overflow-y-auto rounded-xl border border-border"
+        >
           <ul className="divide-y divide-border">
             {users.map((user) => (
               <li
@@ -68,6 +73,8 @@ export function UserList() {
                 </li>
               ))}
           </ul>
+
+          <div ref={sentinelRef} className="h-1" />
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -75,8 +82,6 @@ export function UserList() {
         {!hasMore && !isLoading && users.length > 0 && (
           <p className="text-center text-sm text-muted-foreground">You&apos;ve reached the end.</p>
         )}
-
-        <div ref={sentinelRef} className="h-1" />
       </div>
     </div>
   );
